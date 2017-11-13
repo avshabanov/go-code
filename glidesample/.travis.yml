@@ -1,0 +1,17 @@
+language: go
+sudo: false
+
+go_import_path: github.com/avshabanov/go-code/glidesample
+go:
+  - 1.9
+  - tip
+
+cache:
+  directories:
+    - vendor
+
+install:
+  - make dependencies
+
+script:
+  - make ci

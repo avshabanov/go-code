@@ -1,0 +1,10 @@
+vendor
+.bench
+*.test
+*.log
+*.out
+*.coverprofile
+coverage.txt
+*.pprof
+.bin
+.cache
