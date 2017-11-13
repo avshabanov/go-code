@@ -1,8 +1,18 @@
-hash: f87c72a2bd59453d37defad79c8b5449c03debca59ad782dbba1765091961291
-updated: 2017-11-12T19:06:04.855519042-08:00
+hash: 1735672b9cb58acf2e13fdadaee10246c1a028368c32603252089263aa30e974
+updated: 2017-11-12T19:34:19.281367311-08:00
 imports:
+- name: go.uber.org/atomic
+  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
+- name: go.uber.org/multierr
+  version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
   version: 35aad584952c3e7020db7b839f6b102de6271f89
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
 testImports:
 - name: github.com/davecgh/go-spew
   version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
