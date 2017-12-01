@@ -1,0 +1,17 @@
+package: github.com/avshabanov/go-code/serialization/protobufdemo
+license: MIT
+import:
+- package: github.com/golang/protobuf/protoc-gen-go
+- package: github.com/golang/protobuf/proto
+testImport:
+- package: github.com/stretchr/testify
+  version: ~1.1.4
+  subpackages:
+  - assert
+  - require
+- package: golang.org/x/tools
+  subpackages:
+  - cover
+- package: github.com/golang/lint
+  subpackages:
+  - golint

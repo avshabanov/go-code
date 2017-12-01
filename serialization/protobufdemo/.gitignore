@@ -1,0 +1,12 @@
+
+# Protobuf output
+.gen
+
+# Test run output
+coverage.txt
+
+# Glide dirs
+vendor
+
+# Glide-built Binaries (External dependencies)
+.bin

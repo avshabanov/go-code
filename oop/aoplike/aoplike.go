@@ -96,9 +96,9 @@ func main() {
 	fmt.Println("AOP-Like: Demo of cross-cutting concerns in Golang")
 
 	svc := newUserServiceWrapper(newDefaultUserService(), func(m string, args ...interface{}) joinPointCompleter {
-		fmt.Printf("Before method: %s, args=%s\n", m, args)
+		fmt.Printf("[Aspect] Before method: %s\n\targs=%s\n", m, args)
 		return func(e error, results ...interface{}) {
-			fmt.Printf("After method:  %s, e=%s args=%s\n", m, e, results)
+			fmt.Printf("[Aspect] After method:  %s\n\te=%s args=%s\n", m, e, results)
 		}
 	})
 

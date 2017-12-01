@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package protobufdemo;
+
+enum ProfileState {
+  INACTIVE = 0;
+  ACTIVE = 1;
+}
+
+message UserProfile {
+  string id = 1;
+  FullName name = 2;
+  int32 age = 3;
+  repeated Role roles = 4;
+  ProfileState state = 5;
+}
+
+message FullName {
+  string first = 1;
+  string last = 2;
+  string middle = 3;
+}
+
+message Role {
+  string name = 1;
+}
