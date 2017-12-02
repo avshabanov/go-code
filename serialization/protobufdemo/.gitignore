@@ -10,3 +10,6 @@ vendor
 
 # Glide-built Binaries (External dependencies)
 .bin
+
+# Debugger
+debug*
