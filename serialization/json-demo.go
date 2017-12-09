@@ -29,9 +29,9 @@ func main() {
 	var userRole = &role{ID: "R1", RoleName: "USER", Priority: 14}
 	var adminRole = &role{ID: "R9", RoleName: "ADMIN", Priority: 0}
 	var persons = []*person{
-		&person{ID: "1", Name: "Cavin", Roles: []*role{}},
-		&person{ID: "2", Name: "Alice", Roles: []*role{userRole}},
-		&person{ID: "3", Name: "David", Roles: []*role{userRole, adminRole}},
+		{ID: "1", Name: "Cavin", Roles: []*role{}},
+		{ID: "2", Name: "Alice", Roles: []*role{userRole}},
+		{ID: "3", Name: "David", Roles: []*role{userRole, adminRole}},
 	}
 
 	for index, person := range persons {

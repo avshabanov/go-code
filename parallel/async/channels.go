@@ -181,7 +181,7 @@ func d7() {
 	}()
 
 	for j := 0; j < 3; j++ {
-		jobs <- (j + 1)
+		jobs <- j + 1
 		fmt.Println("sent job", j)
 	}
 	close(jobs)

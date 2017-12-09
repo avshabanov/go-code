@@ -42,16 +42,16 @@ type userServiceWrapper struct {
 
 func (w *userServiceWrapper) add(p *userProfile) (string, error) {
 	jpCompleter := w.jpCreator("UserService.add", p)
-	id, error := w.proxy.add(p)
-	jpCompleter(error, id)
-	return id, error
+	id, e := w.proxy.add(p)
+	jpCompleter(e, id)
+	return id, e
 }
 
 func (w *userServiceWrapper) getByID(id string) (*userProfile, error) {
 	jpCompleter := w.jpCreator("UserService.getByID", id)
-	userProfile, error := w.proxy.getByID(id)
-	jpCompleter(error, userProfile)
-	return userProfile, error
+	userProfile, e := w.proxy.getByID(id)
+	jpCompleter(e, userProfile)
+	return userProfile, e
 }
 
 func newUserServiceWrapper(p userService, j joinPointCreator) userService {
@@ -81,7 +81,7 @@ func (t *defaultUserService) getByID(id string) (*userProfile, error) {
 		}
 	}
 
-	return nil, errors.New("No such user")
+	return nil, errors.New("no such user")
 }
 
 func newDefaultUserService() userService {

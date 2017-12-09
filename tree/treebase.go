@@ -76,7 +76,7 @@ func NewTreeFromValues(
 
 // NewIntTreeFromValues creates a tree from integer slice
 func NewIntTreeFromValues(values []int) *Tree {
-	uv := []interface{}{}
+	var uv []interface{}
 	for _, v := range values {
 		uv = append(uv, v)
 	}

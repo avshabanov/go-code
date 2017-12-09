@@ -29,7 +29,7 @@ func TestFizzBuzz(t *testing.T) {
 			{27, "Fizz"},
 			{30, "FizzBuzz"},
 		}
-		actualPairs := []outputPair{}
+		var actualPairs []outputPair
 
 		FizzBuzz(1, 31, func(index int, output string) {
 			//fmt.Printf("{%d, \"%s\"}\n", index, output)
