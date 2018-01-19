@@ -4,5 +4,8 @@
 # Debugger files
 debug*
 
+# Packages
+vendor
+
 # Idea
 .idea
