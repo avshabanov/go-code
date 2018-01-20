@@ -1,5 +1,11 @@
 package main
 
+/*
+Demo:
+	go run main.go -mode independent-updates
+	go run main.go -mode overlapping-updates
+*/
+
 import (
 	"flag"
 	"fmt"
