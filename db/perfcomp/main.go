@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/avshabanov/go-code/db/db-svc-comp/logic"
+	"github.com/avshabanov/go-code/db/perfcomp/logic"
 	"github.com/avshabanov/go-code/fixture"
 )
 
