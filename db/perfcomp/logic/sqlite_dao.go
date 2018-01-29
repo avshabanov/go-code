@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -115,27 +116,24 @@ func NewSqliteDao(dbPath string) (Dao, error) {
 		return nil, err
 	}
 
-	tx, err := result.db.Begin()
+	// begin transaction that potentially might modify the DB schema
+	tx, err := result.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  false,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	r, err := tx.Query("SELECT COUNT(0) FROM users")
+	r, err := tx.Query("SELECT * FROM users LIMIT 1")
 	if err != nil {
-		// new DB - create schema
+		log.Printf("Unable to access 'users' table, looks like DB has not been initialized. Proceeding with init")
 		if _, err := tx.Exec(schema); err != nil {
 			return nil, fmt.Errorf("can't create schema: %v", err)
 		}
 	} else {
-		// existing DB
-		defer r.Close()
-		for r.Next() {
-			var userCount int
-			if err := r.Scan(&userCount); err != nil {
-				return nil, err
-			}
-			log.Printf("Opened existing DB, count of inserted users: %d", userCount)
-		}
+		log.Printf("The 'users' table is ready for queries, skip initialization")
+		r.Close()
 	}
 
 	if err := tx.Commit(); err != nil {
