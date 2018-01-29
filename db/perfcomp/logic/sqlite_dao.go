@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/avshabanov/go-code/db/sqlutil"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -239,7 +240,6 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 	}
 
 	// now, for each user get corresponding roles
-	rows.Close() // now close for real in advance
 	for _, p := range result.Profiles {
 		if rows, err = tx.Query("SELECT r.rolename FROM roles AS r INNER JOIN user_role AS ur ON r.id=ur.role_id WHERE ur.user_id=?", p.ID); err != nil {
 			return nil, err
@@ -254,7 +254,6 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 
 			p.Roles = append(p.Roles, role)
 		}
-		rows.Close() // now close for real in advance
 
 		if rows, err = tx.Query(
 			"SELECT op.provider_name, oa.ext_user_id, oa.created FROM oauth_accounts AS oa INNER JOIN oauth_provider op ON op.id=oa.provider_id WHERE oa.user_id=?",
@@ -276,36 +275,6 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 				Created:  created,
 			})
 		}
-		rows.Close() // now close for real in advance
-	}
-
-	return result, nil
-}
-
-func selectSingleIntValue(tx *sql.Tx, sqlQuery string, args ...interface{}) (int, error) {
-	rows, err := tx.Query(sqlQuery, args...)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	var result int
-	var obtained bool
-
-	for rows.Next() {
-		if obtained {
-			return 0, fmt.Errorf("ambiguous results for single value query=%s", sqlQuery)
-		}
-
-		if err := rows.Scan(&result); err != nil {
-			return 0, fmt.Errorf("unable to scan results for query=%s: %v", sqlQuery, err)
-		}
-
-		obtained = true
-	}
-
-	if !obtained {
-		return 0, fmt.Errorf("unable to get single value using query=%s", sqlQuery)
 	}
 
 	return result, nil
@@ -313,7 +282,7 @@ func selectSingleIntValue(tx *sql.Tx, sqlQuery string, args ...interface{}) (int
 
 func addProfile(tx *sql.Tx, p *UserProfile) error {
 	for _, r := range p.Roles {
-		roleID, err := selectSingleIntValue(tx, "SELECT id FROM roles WHERE rolename=?", string(r))
+		roleID, err := sqlutil.SelectSingleInt(tx, "SELECT id FROM roles WHERE rolename=?", string(r))
 		if err != nil {
 			return err
 		}
@@ -327,7 +296,7 @@ func addProfile(tx *sql.Tx, p *UserProfile) error {
 	}
 
 	for _, a := range p.Accounts {
-		providerID, err := selectSingleIntValue(tx, "SELECT id FROM oauth_provider AS op WHERE provider_name=?", a.Provider)
+		providerID, err := sqlutil.SelectSingleInt(tx, "SELECT id FROM oauth_provider AS op WHERE provider_name=?", a.Provider)
 		if err != nil {
 			return err
 		}
