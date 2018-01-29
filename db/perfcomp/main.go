@@ -12,56 +12,53 @@ import (
 	"github.com/avshabanov/go-code/fixture"
 )
 
-type newDao func(openParams string) (logic.Dao, error)
-
 const sqliteDaoType = "sqlite"
 
 var (
-	dbPath = flag.String("db-path", "/tmp/perftest-sqlite.db", "Path to identity service database")
+	dbPath = flag.String("db-path", "/tmp/perfcomp-sqlite.db", "Path to identity service database")
 	dbType = flag.String("db-type", sqliteDaoType, "Type of the database to test")
-
-	daoFactoryMap = map[string]newDao{
-		sqliteDaoType: logic.NewSqliteDao,
-	}
 )
 
 func main() {
 	flag.Parse()
 
-	newDaoFunc := daoFactoryMap[*dbType]
-	if newDaoFunc == nil {
-		log.Fatalf("unknown dao type: %s", *dbType)
-		return
+	var dao logic.Dao
+	var err error
+	switch *dbType {
+	case sqliteDaoType:
+		dao, err = logic.NewSqliteDao(*dbPath)
+	case "bolt":
+		dao, err = logic.NewBoltDao(*dbPath)
+	default:
+		log.Fatalf("unable to create new DAO of type %s", *dbType)
 	}
 
-	dao, err := newDaoFunc(*dbPath)
 	if err != nil {
 		log.Fatalf("cannot create dao: %v", err)
-		return
 	}
 	defer dao.Close()
 
 	userPage, err := dao.QueryUsers("", 1)
 	if err != nil {
 		log.Fatalf("cannot get user profiles: %v", err)
-		return
 	}
 	if len(userPage.Profiles) == 0 {
 		// insert fixture
 		if err = dao.Add(getUserFixture(10, 1)); err != nil {
 			log.Fatalf("cannot add user profile: %v", err)
-			return
 		}
 	}
 
 	userPage, err = dao.QueryUsers("", 10)
 	if err != nil {
 		log.Fatalf("cannot get user profiles: %v", err)
-		return
 	}
+
+	fmt.Println("users:")
 	for _, p := range userPage.Profiles {
-		fmt.Printf("User: %s\n", p)
+		fmt.Printf("# %s\n", p)
 	}
+	fmt.Println("---")
 }
 
 //
