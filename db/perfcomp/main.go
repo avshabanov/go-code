@@ -20,7 +20,8 @@ var (
 	dbType      = flag.String("db-type", sqliteDaoType, "Type of the database to test")
 	initSize    = flag.Int("init-size", 10, "Size of initial data sample, applicable to initialization mode only")
 	offsetToken = flag.String("ot", "", "Offset token, applicable to select mode only")
-	mode        = flag.String("mode", "select", "App launch mode, possible values: select, reinit")
+	mode        = flag.String("mode", "select", "App launch mode, e.g.: select, reinit, parallel-select")
+	jobs        = flag.Int("jobs", 8, "Number of concurrently executed jobs")
 )
 
 func main() {
@@ -57,6 +58,8 @@ func main() {
 		selectUsers(dao)
 	case "reinit":
 		reinit(dao)
+	case "parallel-select":
+		parallelSelectUsers(dao)
 	default:
 		log.Fatalf("unknown mode=%s", *mode)
 	}
@@ -87,8 +90,80 @@ func iterate(dao logic.Dao, limits []int, iterations int) {
 	}
 }
 
-func parallelSelects(dao logic.Dao) {
+type parallelSelectParams struct {
+	id         int
+	limits     []int
+	iterations int
+}
 
+type parallelSelectResult struct {
+	id                int
+	totalUsersFetched int
+	timeSpent         time.Duration
+}
+
+func parallelSelectUsers(dao logic.Dao) {
+	const threads = 10
+	jobParams := make(chan *parallelSelectParams, threads)
+	done := make(chan *parallelSelectResult, threads)
+
+	// start jobs
+	for i := 0; i < threads; i++ {
+		go func() {
+			params := <-jobParams
+			log.Printf("[job %d] starting", params.id)
+
+			offsetToken := ""
+			n := 0
+			started := time.Now()
+			for j := 0; j < params.iterations; j++ {
+				userPage, err := dao.QueryUsers(offsetToken, params.limits[j%len(params.limits)])
+				if err != nil {
+					log.Printf("[job %d] error while querying users: %v", params.id, err)
+					break
+				}
+				offsetToken = userPage.OffsetToken
+				n += len(userPage.Profiles)
+			}
+
+			done <- &parallelSelectResult{
+				id:                params.id,
+				totalUsersFetched: n,
+				timeSpent:         time.Now().Sub(started),
+			}
+		}()
+	}
+
+	// send work units for the jobs
+	r := rand.New(rand.NewSource(101))
+	for i := 0; i < threads; i++ {
+		jobParams <- getParallelSelectParams(i, r)
+	}
+
+	// wait for completion
+	for i := 0; i < threads; i++ {
+		result := <-done
+		log.Printf("job %d done, totalUsersFetched=%d, timeSpent=%s",
+			result.id, result.totalUsersFetched, result.timeSpent)
+	}
+}
+
+func getParallelSelectParams(id int, r *rand.Rand) *parallelSelectParams {
+	limitIndex := 0
+	if r.Intn(2) == 0 {
+		// make sure that majority of limits are smaller ones
+		limitIndex = r.Intn(4)
+	}
+	limits := make([]int, 100)
+	for j := 0; j < len(limits); j++ {
+		limits[j] = r.Intn(10) * (1 + limitIndex)
+	}
+
+	return &parallelSelectParams{
+		id:         id,
+		limits:     limits,
+		iterations: (4 - limitIndex) * 1000,
+	}
 }
 
 func reinit(dao logic.Dao) {
