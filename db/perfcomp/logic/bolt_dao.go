@@ -135,7 +135,7 @@ func (t *boltDao) QueryUsers(offsetToken string, limit int) (*UserPage, error) {
 			k, v = cur.Next()
 
 			size++
-			if size > limit {
+			if size >= limit {
 				if k != nil {
 					result.OffsetToken = hex.EncodeToString(k)
 				}

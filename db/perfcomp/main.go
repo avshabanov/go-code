@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/avshabanov/go-code/db/perfcomp/logic"
@@ -15,12 +16,25 @@ import (
 const sqliteDaoType = "sqlite"
 
 var (
-	dbPath = flag.String("db-path", "/tmp/perfcomp-sqlite.db", "Path to identity service database")
-	dbType = flag.String("db-type", sqliteDaoType, "Type of the database to test")
+	dbPath      = flag.String("db-path", "", "Path to identity service database, e.g. /tmp/perfcomp-sqlite.db")
+	dbType      = flag.String("db-type", sqliteDaoType, "Type of the database to test")
+	initSize    = flag.Int("init-size", 10, "Size of initial data sample, applicable to initialization mode only")
+	offsetToken = flag.String("ot", "", "Offset token, applicable to select mode only")
+	mode        = flag.String("mode", "select", "App launch mode, possible values: select, reinit")
 )
 
 func main() {
 	flag.Parse()
+
+	if len(*dbPath) == 0 {
+		log.Printf("db path is empty")
+		flag.Usage()
+		return
+	}
+
+	if *mode == "reinit" {
+		deleteFileIfExists(*dbPath)
+	}
 
 	var dao logic.Dao
 	var err error
@@ -38,18 +52,54 @@ func main() {
 	}
 	defer dao.Close()
 
-	userPage, err := dao.QueryUsers("", 1)
-	if err != nil {
-		log.Fatalf("cannot get user profiles: %v", err)
+	switch *mode {
+	case "select":
+		selectUsers(dao)
+	case "reinit":
+		reinit(dao)
+	default:
+		log.Fatalf("unknown mode=%s", *mode)
 	}
-	if len(userPage.Profiles) == 0 {
-		// insert fixture
-		if err = dao.Add(getUserFixture(10, 1)); err != nil {
-			log.Fatalf("cannot add user profile: %v", err)
-		}
-	}
+}
 
-	userPage, err = dao.QueryUsers("", 10)
+//
+// Private
+//
+
+func deleteFileIfExists(filePath string) {
+	// file exists, try to delete it
+	if err := os.Remove(filePath); err != nil {
+		log.Printf("reinit db file=%s, remove operation failed: %v", filePath, err)
+	}
+}
+
+func iterate(dao logic.Dao, limits []int, iterations int) {
+	offsetToken := ""
+	for n := 0; n < iterations; n++ {
+		limit := n % len(limits)
+
+		page, err := dao.QueryUsers(offsetToken, limit)
+		if err != nil {
+			log.Printf("unexpected error while querying users: %v", err)
+		}
+
+		offsetToken = page.OffsetToken
+	}
+}
+
+func parallelSelects(dao logic.Dao) {
+
+}
+
+func reinit(dao logic.Dao) {
+	// insert fixture
+	if err := dao.Add(getUserFixture(*initSize, 1)); err != nil {
+		log.Fatalf("cannot add user profile: %v", err)
+	}
+}
+
+func selectUsers(dao logic.Dao) {
+	userPage, err := dao.QueryUsers(*offsetToken, 8)
 	if err != nil {
 		log.Fatalf("cannot get user profiles: %v", err)
 	}
@@ -58,12 +108,14 @@ func main() {
 	for _, p := range userPage.Profiles {
 		fmt.Printf("# %s\n", p)
 	}
-	fmt.Println("---")
-}
 
-//
-// Private
-//
+	if len(userPage.OffsetToken) > 0 {
+		fmt.Printf("# offsetToken: %s\n", userPage.OffsetToken)
+	} else {
+		fmt.Println("# <last page>")
+	}
+
+}
 
 func getUserFixture(count int, startID int) []*logic.UserProfile {
 	result := []*logic.UserProfile{}
