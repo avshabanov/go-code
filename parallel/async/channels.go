@@ -66,7 +66,7 @@ func d4() {
 		c1 <- "two sec"
 	}()
 
-	fmt.Printf("[%s] Before select\n", time.Now().String())
+	fmt.Printf("[%s] Before select\n", time.Now())
 	for i := 0; i < 2; i++ {
 		select {
 		case msg1 := <-c1:
@@ -181,7 +181,7 @@ func d7() {
 	}()
 
 	for j := 0; j < 3; j++ {
-		jobs <- j + 1
+		jobs <- j
 		fmt.Println("sent job", j)
 	}
 	close(jobs)
@@ -205,10 +205,8 @@ func d8() {
 // Entry Point
 //
 
-type demofunc func()
-
 func main() {
-	demos := []demofunc{
+	demos := []func(){
 		d1,
 		d2,
 		d3,
