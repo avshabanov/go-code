@@ -15,7 +15,10 @@ import (
 type sqliteDao struct {
 	Dao
 
-	db *sql.DB
+	db             *sql.DB
+	queryUsers     *sql.Stmt
+	queryRoles     *sql.Stmt
+	queryProviders *sql.Stmt
 }
 
 const schema = `
@@ -23,7 +26,7 @@ CREATE TABLE users (
 	id 						INTEGER NOT NULL,
 	username 			VARCHAR(64) NOT NULL,
 	created 			DATE NULL,
-	CONSTRAINT pk_customers PRIMARY KEY (id)
+	CONSTRAINT pk_users PRIMARY KEY (id)
 );
 
 CREATE TABLE roles (
@@ -141,6 +144,18 @@ func NewSqliteDao(dbPath string) (Dao, error) {
 		return nil, err // unlikely
 	}
 
+	if result.queryUsers, err = result.db.Prepare("SELECT id, username, created FROM users WHERE id>? ORDER BY id LIMIT ?"); err != nil {
+		return nil, err
+	}
+
+	if result.queryRoles, err = result.db.Prepare("SELECT r.rolename FROM roles AS r INNER JOIN user_role AS ur ON r.id=ur.role_id WHERE ur.user_id=?"); err != nil {
+		return nil, err
+	}
+
+	if result.queryProviders, err = result.db.Prepare("SELECT op.provider_name, oa.ext_user_id, oa.created FROM oauth_accounts AS oa INNER JOIN oauth_provider op ON op.id=oa.provider_id WHERE oa.user_id=?"); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -173,7 +188,7 @@ func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error)
 	var startID int64
 
 	if len(offsetToken) > 0 {
-		if startID, err = strconv.ParseInt(offsetToken, 10, 8); err != nil {
+		if startID, err = strconv.ParseInt(offsetToken, 10, 32); err != nil {
 			return nil, fmt.Errorf("invalid offset token: %v", err)
 		}
 	}
@@ -183,7 +198,7 @@ func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error)
 		return nil, fmt.Errorf("unable to start tx: %v", err)
 	}
 
-	result, err := selectUserPage(tx, startID, limit)
+	result, err := selectUserPage(t, tx, startID, limit)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -197,12 +212,12 @@ func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error)
 // Private
 //
 
-func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
-	rows, err := tx.Query(
-		"SELECT id, username, created FROM users WHERE id>? ORDER BY id LIMIT ?",
-		startID,
-		limit+1,
-	)
+func selectUserPage(d *sqliteDao, tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
+	queryUsers := tx.Stmt(d.queryUsers)
+	queryRoles := tx.Stmt(d.queryRoles)
+	queryProviders := tx.Stmt(d.queryProviders)
+
+	rows, err := queryUsers.Query(startID, limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +243,7 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 		result.Profiles = append(result.Profiles, profile)
 
 		rowsScanned++
-		if rowsScanned > limit {
+		if rowsScanned >= limit {
 			if rows.Next() {
 				if err := rows.Scan(&id, &username, &created); err != nil {
 					return nil, err
@@ -239,9 +254,9 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 		}
 	}
 
-	// now, for each user get corresponding roles
+	// now, for each user get corresponding roles and oauth profiles
 	for _, p := range result.Profiles {
-		if rows, err = tx.Query("SELECT r.rolename FROM roles AS r INNER JOIN user_role AS ur ON r.id=ur.role_id WHERE ur.user_id=?", p.ID); err != nil {
+		if rows, err = queryRoles.Query(p.ID); err != nil {
 			return nil, err
 		}
 		defer rows.Close()
@@ -255,9 +270,7 @@ func selectUserPage(tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 			p.Roles = append(p.Roles, role)
 		}
 
-		if rows, err = tx.Query(
-			"SELECT op.provider_name, oa.ext_user_id, oa.created FROM oauth_accounts AS oa INNER JOIN oauth_provider op ON op.id=oa.provider_id WHERE oa.user_id=?",
-			p.ID); err != nil {
+		if rows, err = queryProviders.Query(p.ID); err != nil {
 			return nil, err
 		}
 

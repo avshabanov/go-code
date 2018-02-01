@@ -44,6 +44,8 @@ func main() {
 		dao, err = logic.NewSqliteDao(*dbPath)
 	case "bolt":
 		dao, err = logic.NewBoltDao(*dbPath)
+	case "kvsqlite":
+		dao, err = logic.NewKvSqliteDao(*dbPath)
 	default:
 		log.Fatalf("unable to create new DAO of type %s", *dbType)
 	}
