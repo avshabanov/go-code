@@ -134,10 +134,11 @@ func (t *kvSqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, erro
 
 	result := &UserPage{}
 
-	var id int64
-	var v []byte
 	rowsScanned := 0
 	for rows.Next() {
+		var id int64
+		var v sql.RawBytes // []byte is safer, but RawBytes gives (theoretically) better performance
+
 		if err := rows.Scan(&id, &v); err != nil {
 			return nil, err
 		}
@@ -147,7 +148,6 @@ func (t *kvSqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, erro
 		if err := decoder.Decode(&p); err != nil {
 			return nil, fmt.Errorf("unable to decode user profile value: offset=%d, offsetToken=%s, error=%v", rowsScanned, offsetToken, err)
 		}
-
 		result.Profiles = append(result.Profiles, &p)
 
 		rowsScanned++
