@@ -96,6 +96,65 @@ func (t *boltDao) Add(profiles []*UserProfile) error {
 	})
 }
 
+func (t *boltDao) Get(id int) (*UserProfile, error) {
+	var profile *UserProfile
+	if err := t.db.View(func(tx *bolt.Tx) error {
+		users := tx.Bucket(bucketUsers)
+		if users == nil {
+			return fmt.Errorf("unable to query users: users bucket is missing; data corrupted?")
+		}
+
+		v := users.Get(getBytesFromID(id))
+		if v == nil {
+			return fmt.Errorf("unable to get user with id=%d", id)
+		}
+
+		decoder := gob.NewDecoder(bytes.NewBuffer(v))
+		var p UserProfile
+		if err := decoder.Decode(&p); err != nil {
+			return fmt.Errorf("unable to decode user profile value: id=%d, error=%v", id, err)
+		}
+
+		profile = &p
+
+		return nil
+
+	}); err != nil {
+		return nil, fmt.Errorf("unable to get user {id: %d}: %v", id, err)
+	}
+
+	return profile, nil
+}
+
+func (t *boltDao) GetIDRange() (from int, to int, err error) {
+	var min int
+	var max int
+	if err := t.db.View(func(tx *bolt.Tx) error {
+		users := tx.Bucket(bucketUsers)
+		if users == nil {
+			return fmt.Errorf("unable to query users: users bucket is missing; data corrupted?")
+		}
+
+		cur := users.Cursor()
+		for k, _ := cur.First(); k != nil; k, _ = cur.Next() {
+			key := int(binary.BigEndian.Uint32(k))
+			if key < min || min == 0 {
+				min = key
+			}
+			if key > max {
+				max = key
+			}
+		}
+
+		return nil
+
+	}); err != nil {
+		return 0, 0, err
+	}
+
+	return min, max, nil
+}
+
 func (t *boltDao) QueryUsers(offsetToken string, limit int) (*UserPage, error) {
 	var result UserPage
 

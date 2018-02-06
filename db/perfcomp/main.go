@@ -62,6 +62,8 @@ func main() {
 		reinit(dao)
 	case "parallel-select":
 		parallelSelectUsers(dao)
+	case "random-get":
+		randomGetUsers(dao)
 	default:
 		log.Fatalf("unknown mode=%s", *mode)
 	}
@@ -89,6 +91,64 @@ func iterate(dao logic.Dao, limits []int, iterations int) {
 		}
 
 		offsetToken = page.OffsetToken
+	}
+}
+
+func randomGetUsers(dao logic.Dao) {
+	const iterations = 10
+	//const iterations = 100000
+
+	min, max, err := dao.GetIDRange()
+	if err != nil {
+		fmt.Printf("unable to get id range, err=%v\n", err)
+		return
+	}
+
+	fmt.Printf("got id range: {min: %d, max: %d}\n", min, max)
+
+	const threads = 10
+	jobParams := make(chan int, threads)
+	done := make(chan int, threads)
+
+	// start jobs
+	for i := 0; i < threads; i++ {
+		go func() {
+			id := <-jobParams
+			log.Printf("[job %d] starting", id)
+			r := rand.New(rand.NewSource(int64(1000 + id)))
+
+			for j := 0; j < iterations; j++ {
+				userID := min + r.Intn(max-min)
+				u, err := dao.Get(userID)
+				if err != nil {
+					log.Printf("[job %d] error while querying users: %v", id, err)
+					break
+				}
+
+				if u == nil { // should never happen
+					log.Printf("[job %d] got null user for userID=%d", id, userID)
+					break
+				}
+
+				log.Printf("[job %d] u = %s", id, u)
+			}
+
+			done <- id
+		}()
+	}
+
+	// send work units for the jobs
+	for i := 0; i < threads; i++ {
+		jobParams <- i
+	}
+
+	started := time.Now()
+
+	// wait for completion
+	for i := 0; i < threads; i++ {
+		id := <-done
+		timeSpent := time.Now().Sub(started)
+		log.Printf("job %d done, timeSpent=%s", id, timeSpent)
 	}
 }
 

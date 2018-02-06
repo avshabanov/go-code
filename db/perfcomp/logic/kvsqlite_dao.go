@@ -9,6 +9,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/avshabanov/go-code/db/sqlutil"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -18,6 +19,7 @@ type kvSqliteDao struct {
 	db         *sql.DB
 	insertUser *sql.Stmt
 	queryUsers *sql.Stmt
+	getUser    *sql.Stmt
 }
 
 const kvSqliteSchema = `
@@ -74,6 +76,10 @@ func NewKvSqliteDao(dbPath string) (Dao, error) {
 		return nil, err
 	}
 
+	if result.getUser, err = result.db.Prepare("SELECT id, v FROM kv_users WHERE id=?"); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -108,6 +114,70 @@ func (t *kvSqliteDao) Add(profiles []*UserProfile) error {
 	return tx.Commit()
 }
 
+func (t *kvSqliteDao) Get(id int) (*UserProfile, error) {
+	tx, err := t.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	getUser := tx.Stmt(t.getUser)
+
+	var profile UserProfile
+	if err := sqlutil.SelectSingleValue(func(rows *sql.Rows) error {
+		var id int64
+		var v sql.RawBytes // []byte is safer, but RawBytes gives (theoretically) better performance
+
+		if err := rows.Scan(&id, &v); err != nil {
+			return err
+		}
+
+		decoder := gob.NewDecoder(bytes.NewBuffer(v))
+		var p UserProfile
+		if err := decoder.Decode(&p); err != nil {
+			return fmt.Errorf("unable to decode user profile value: id=%d, error=%v", id, err)
+		}
+		return nil
+	}, getUser, id); err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &profile, nil
+}
+
+func (t *kvSqliteDao) GetIDRange() (from int, to int, err error) {
+	tx, err := t.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+
+	min, err := sqlutil.SelectSingleInt(tx, "SELECT MIN(id) FROM kv_users")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	max, err := sqlutil.SelectSingleInt(tx, "SELECT MAX(id) FROM kv_users")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, 0, err
+	}
+
+	return min, max, nil
+}
 func (t *kvSqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error) {
 	var err error
 	var startID int64
@@ -118,7 +188,10 @@ func (t *kvSqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, erro
 		}
 	}
 
-	tx, err := t.db.Begin()
+	tx, err := t.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to start tx: %v", err)
 	}

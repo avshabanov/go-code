@@ -62,4 +62,6 @@ type Dao interface {
 
 	Add(profiles []*UserProfile) error
 	QueryUsers(offsetToken string, limit int) (*UserPage, error)
+	Get(id int) (*UserProfile, error)
+	GetIDRange() (from int, to int, err error)
 }

@@ -24,6 +24,7 @@ $ go run main.go --db-path /tmp/perfcomp-bolt-100k.db --db-type bolt --mode rein
 ... (init db)
 $ go run main.go --db-path /tmp/perfcomp-bolt-100k.db --db-type bolt --mode parallel-select
 ... (run tests)
+$ go run main.go --db-path /tmp/perfcomp-bolt-100k.db --db-type bolt --mode random-get
 ```
 
 Sample run:
@@ -48,7 +49,9 @@ job 5 done, totalUsersFetched=29010, timeSpent=2.556816733s
 $ go run main.go --db-path /tmp/perfcomp-sqlite-100k.db --db-type sqlite --mode reinit --init-size 100000
 ... (init db)
 $ go run main.go --db-path /tmp/perfcomp-sqlite-100k.db --db-type sqlite --mode parallel-select
-... (run tests)
+... (run tests, do random scans in parallel)
+$ go run main.go --db-path /tmp/perfcomp-sqlite-100k.db --db-type sqlite --mode random-get
+... (run tests, get random users in parallel)
 ```
 
 Sample run:
@@ -85,6 +88,8 @@ job 5 done, totalUsersFetched=29010, timeSpent=3.239841158s
 $ go run main.go --db-path /tmp/perfcomp-kvsqlite-100k.db --db-type kvsqlite --mode reinit --init-size 100000
 ...
 $ go run main.go --db-path /tmp/perfcomp-kvsqlite-100k.db --db-type kvsqlite --mode parallel-select
+...
+$ go run main.go --db-path /tmp/perfcomp-kvsqlite-100k.db --db-type kvsqlite --mode random-get
 ...
 ```
 

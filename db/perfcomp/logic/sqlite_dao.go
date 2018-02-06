@@ -17,6 +17,7 @@ type sqliteDao struct {
 
 	db             *sql.DB
 	queryUsers     *sql.Stmt
+	getUser        *sql.Stmt
 	queryRoles     *sql.Stmt
 	queryProviders *sql.Stmt
 }
@@ -128,6 +129,7 @@ func NewSqliteDao(dbPath string) (Dao, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
 
 	r, err := tx.Query("SELECT * FROM users LIMIT 1")
 	if err != nil {
@@ -144,15 +146,23 @@ func NewSqliteDao(dbPath string) (Dao, error) {
 		return nil, err // unlikely
 	}
 
-	if result.queryUsers, err = result.db.Prepare("SELECT id, username, created FROM users WHERE id>? ORDER BY id LIMIT ?"); err != nil {
+	if result.queryUsers, err = result.db.Prepare(
+		"SELECT id, username, created FROM users WHERE id>? ORDER BY id LIMIT ?"); err != nil {
 		return nil, err
 	}
 
-	if result.queryRoles, err = result.db.Prepare("SELECT r.rolename FROM roles AS r INNER JOIN user_role AS ur ON r.id=ur.role_id WHERE ur.user_id=?"); err != nil {
+	if result.queryRoles, err = result.db.Prepare(
+		"SELECT r.rolename FROM roles AS r INNER JOIN user_role AS ur ON r.id=ur.role_id WHERE ur.user_id=?"); err != nil {
 		return nil, err
 	}
 
-	if result.queryProviders, err = result.db.Prepare("SELECT op.provider_name, oa.ext_user_id, oa.created FROM oauth_accounts AS oa INNER JOIN oauth_provider op ON op.id=oa.provider_id WHERE oa.user_id=?"); err != nil {
+	if result.queryProviders, err = result.db.Prepare(
+		"SELECT op.provider_name, oa.ext_user_id, oa.created FROM oauth_accounts AS oa INNER JOIN oauth_provider op ON op.id=oa.provider_id WHERE oa.user_id=?"); err != nil {
+		return nil, err
+	}
+
+	if result.getUser, err = result.db.Prepare(
+		"SELECT id, username, created FROM users WHERE id=?"); err != nil {
 		return nil, err
 	}
 
@@ -183,6 +193,66 @@ func (t *sqliteDao) Add(profiles []*UserProfile) error {
 	return nil
 }
 
+func (t *sqliteDao) Get(id int) (*UserProfile, error) {
+	tx, err := t.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("unable to start tx: %v", err)
+	}
+	defer tx.Rollback()
+
+	getUser := tx.Stmt(t.getUser)
+	queryRoles := tx.Stmt(t.queryRoles)
+	queryProviders := tx.Stmt(t.queryProviders)
+
+	rows, err := getUser.Query(id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		profile, err := scanUserProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = populateProfile(profile, queryRoles, queryProviders); err != nil {
+			return nil, err
+		}
+
+		return profile, nil
+	}
+
+	return nil, fmt.Errorf("there is no profile with id=%d", id)
+}
+
+func (t *sqliteDao) GetIDRange() (from int, to int, err error) {
+	tx, err := t.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+
+	min, err := sqlutil.SelectSingleInt(tx, "SELECT MIN(id) FROM users")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	max, err := sqlutil.SelectSingleInt(tx, "SELECT MAX(id) FROM users")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, 0, err
+	}
+
+	return min, max, nil
+}
+
 func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error) {
 	var err error
 	var startID int64
@@ -193,14 +263,17 @@ func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error)
 		}
 	}
 
-	tx, err := t.db.Begin()
+	tx, err := t.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to start tx: %v", err)
 	}
+	defer tx.Rollback()
 
 	result, err := selectUserPage(t, tx, startID, limit)
 	if err != nil {
-		tx.Rollback()
 		return nil, err
 	}
 	tx.Commit()
@@ -211,6 +284,63 @@ func (t *sqliteDao) QueryUsers(offsetToken string, limit int) (*UserPage, error)
 //
 // Private
 //
+
+func populateProfile(
+	p *UserProfile,
+	queryRoles *sql.Stmt,
+	queryProviders *sql.Stmt,
+) error {
+	rows, err := queryRoles.Query(p.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var role string
+		if err = rows.Scan(&role); err != nil {
+			return err
+		}
+
+		p.Roles = append(p.Roles, role)
+	}
+
+	if rows, err = queryProviders.Query(p.ID); err != nil {
+		return err
+	}
+
+	for rows.Next() {
+		var providerName string
+		var token string
+		var created time.Time
+		if err = rows.Scan(&providerName, &token, &created); err != nil {
+			return err
+		}
+
+		p.Accounts = append(p.Accounts, &OauthAccount{
+			Provider: providerName,
+			Token:    token,
+			Created:  created,
+		})
+	}
+
+	return nil
+}
+
+func scanUserProfile(rows *sql.Rows) (*UserProfile, error) {
+	var id int64
+	var username string
+	var created time.Time
+	if err := rows.Scan(&id, &username, &created); err != nil {
+		return nil, err
+	}
+
+	return &UserProfile{
+		ID:      int(id),
+		Name:    username,
+		Created: created,
+	}, nil
+}
 
 func selectUserPage(d *sqliteDao, tx *sql.Tx, startID int64, limit int) (*UserPage, error) {
 	queryUsers := tx.Stmt(d.queryUsers)
@@ -227,17 +357,9 @@ func selectUserPage(d *sqliteDao, tx *sql.Tx, startID int64, limit int) (*UserPa
 
 	rowsScanned := 0
 	for rows.Next() {
-		var id int64
-		var username string
-		var created time.Time
-		if err := rows.Scan(&id, &username, &created); err != nil {
+		profile, err := scanUserProfile(rows)
+		if err != nil {
 			return nil, err
-		}
-
-		profile := &UserProfile{
-			ID:      int(id),
-			Name:    username,
-			Created: created,
 		}
 
 		result.Profiles = append(result.Profiles, profile)
@@ -245,6 +367,9 @@ func selectUserPage(d *sqliteDao, tx *sql.Tx, startID int64, limit int) (*UserPa
 		rowsScanned++
 		if rowsScanned >= limit {
 			if rows.Next() {
+				var id int64
+				var username string
+				var created time.Time
 				if err := rows.Scan(&id, &username, &created); err != nil {
 					return nil, err
 				}
@@ -256,37 +381,8 @@ func selectUserPage(d *sqliteDao, tx *sql.Tx, startID int64, limit int) (*UserPa
 
 	// now, for each user get corresponding roles and oauth profiles
 	for _, p := range result.Profiles {
-		if rows, err = queryRoles.Query(p.ID); err != nil {
+		if err := populateProfile(p, queryRoles, queryProviders); err != nil {
 			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var role string
-			if err = rows.Scan(&role); err != nil {
-				return nil, err
-			}
-
-			p.Roles = append(p.Roles, role)
-		}
-
-		if rows, err = queryProviders.Query(p.ID); err != nil {
-			return nil, err
-		}
-
-		for rows.Next() {
-			var providerName string
-			var token string
-			var created time.Time
-			if err = rows.Scan(&providerName, &token, &created); err != nil {
-				return nil, err
-			}
-
-			p.Accounts = append(p.Accounts, &OauthAccount{
-				Provider: providerName,
-				Token:    token,
-				Created:  created,
-			})
 		}
 	}
 
