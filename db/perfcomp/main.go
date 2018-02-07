@@ -95,8 +95,8 @@ func iterate(dao logic.Dao, limits []int, iterations int) {
 }
 
 func randomGetUsers(dao logic.Dao) {
-	const iterations = 10
-	//const iterations = 100000
+	//const iterations = 10
+	const iterations = 100000
 
 	min, max, err := dao.GetIDRange()
 	if err != nil {
@@ -106,7 +106,9 @@ func randomGetUsers(dao logic.Dao) {
 
 	fmt.Printf("got id range: {min: %d, max: %d}\n", min, max)
 
+	//const threads = 1
 	const threads = 10
+
 	jobParams := make(chan int, threads)
 	done := make(chan int, threads)
 
@@ -130,7 +132,7 @@ func randomGetUsers(dao logic.Dao) {
 					break
 				}
 
-				log.Printf("[job %d] u = %s", id, u)
+				//log.Printf("[job %d] u = %s", id, u)
 			}
 
 			done <- id

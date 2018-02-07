@@ -136,8 +136,7 @@ func (t *kvSqliteDao) Get(id int) (*UserProfile, error) {
 		}
 
 		decoder := gob.NewDecoder(bytes.NewBuffer(v))
-		var p UserProfile
-		if err := decoder.Decode(&p); err != nil {
+		if err := decoder.Decode(&profile); err != nil {
 			return fmt.Errorf("unable to decode user profile value: id=%d, error=%v", id, err)
 		}
 		return nil
