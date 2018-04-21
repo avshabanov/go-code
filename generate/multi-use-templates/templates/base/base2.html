@@ -1,0 +1,22 @@
+{{ define "base2" }}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Base #2 &raquo; {{ .Title }}</title>
+</head>
+<body>
+<h2>Hello from base2-composite page</h2>
+<div id="main-content" class="container">
+{{ if .MatchType "foo" }}
+{{ template "content" .Content }}
+{{ else  }}
+{{ if .MatchType "bar" }}
+{{ template "bar-content" .Content }}
+{{ end }}
+{{ end }}
+</div>
+</body>
+</html>
+
+{{ end }}

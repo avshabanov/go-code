@@ -1,0 +1,16 @@
+{{ define "base1" }}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Base #1 &raquo; {{ .Title }}</title>
+</head>
+<body>
+<h2>Hello from base1-composite page</h2>
+<div id="main-content" class="container">
+{{ template "content" .Content }}
+</div>
+</body>
+</html>
+
+{{ end }}
