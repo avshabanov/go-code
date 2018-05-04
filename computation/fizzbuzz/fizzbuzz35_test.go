@@ -1,4 +1,4 @@
-package computation
+package fizzbuzz
 
 import (
 	"testing"

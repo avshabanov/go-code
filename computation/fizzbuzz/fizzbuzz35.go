@@ -1,4 +1,4 @@
-package computation
+package fizzbuzz
 
 // FizzBuzzOutput is a callback function type for FizzBuzz function
 type FizzBuzzOutput func(index int, output string)
