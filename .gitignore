@@ -9,3 +9,7 @@ vendor
 
 # Idea
 .idea
+
+# Build Dirs
+target
+
